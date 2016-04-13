@@ -10,12 +10,15 @@
 . getopts_long
 #http://stchaz.free.fr/getopts_long
 
-VERSION=0.1.0
+VERSION=0.1.1
 SUBJECT=gopt24gyuf83
-USAGE="Usage: command -ihv args"
+USAGE="Usage: command -rpufhv args"
 
-#User Globals
-REMOTE_SERVER="root@46.101.60.124"
+#Defaults
+REMOTE_USERIP="dev@46.101.60.124"
+REMOTE_PASS=""
+REMOTE_FOLDER="/home/dev/web/ngo2.ru/public_html/samara42/"
+
 DB_PREFIX="testru_"
 
 # --- Options processing -------------------------------------------
@@ -24,9 +27,10 @@ if [ $# == 0 ] ; then
     exit 1;
 fi
 
-read -n 1 -p "Are you shure you want to run wp site migration script?(y/[a]): " AMSURE 
-[ "$AMSURE" = "y" ] || exit
-echo "" 1>&2
+#read -n 1 -p "Are you shure you want to run wp site migration script?(y/[a]): " AMSURE 
+#[ "$AMSURE" = "y" ] || exit
+#echo "" 1>&2
+
 
 
 #------------------------------------------
@@ -51,12 +55,19 @@ sync_remote_site() {
 	#mode: overwrite or append?
 
 	#Get local folder name from DB name
+	#if [ $# == 0 ] ; then
+	 #   echo $USAGE
+	  #  exit 1;
+	#fi
 
 	generate_db_credentials
 	mkdir ./$db_name
 	cd ./$db_name
 	#rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./
-	echo "rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./"
+	#echo "rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./"
+	echo "rsync -avz -e ssh $REMOTE_USERIP:$REMOTE_FOLDER ./"
+	rsync rsync -avz -e ssh $REMOTE_USERIP:$REMOTE_FOLDER ./
+
 }
 
 parse_wp_credentials() {
@@ -116,32 +127,28 @@ change_docroot() {
 	echo "TODO:change_docroot()"
 }
 #------------------------------------------
-
-while getopts_long :a:s:c:u:i:vh opt \
-    #xxx required_argument \
-    #yyy required_argument \
+#As first input is reserved for command then:
+OPTLIND=2 
+while getopts_long p:f:u:vh opt \
+   pass required_argument \
+   userip required_argument \
+   folder required_argument \
+   version no_argument \
     help 0 "" "$@"
     do
         case "$opt" in
-      		a|all)
-		        sync_all
-		        ;;
-      		s|syncsite)
-		        sync_remote_site
-		        ;;
-      		c|createdb)
-			generate_db_credentials
-		        create_local_db
-		        ;;
-      		u|changeurl)
-		        change_localdb_url
-		        ;;
-      		i|importdb)
-			parse_wp_credentials
-			generate_db_credentials
-		        create_local_db
-		        import_remote_db
-		        ;;
+		p|pass)
+			REMOTE_PASS=$OPTLARG
+			echo "Remote Pass = $REMOTE_PASS"
+			;;
+		u|userip)
+			REMOTE_USERIP=$OPTLARG
+			echo "Remote user and IP = $REMOTE_USERIP"
+			;;
+		f|folder)
+			REMOTE_FOLDER=$OPTLARG
+			echo "Remote Folder = $REMOTE_FOLDER"
+			;;
       		v|version)
 		        echo "Version $VERSION"
 		        exit 0;
@@ -151,23 +158,17 @@ while getopts_long :a:s:c:u:i:vh opt \
 			exit 0;
 			;;
 	      "?")
-			echo "Unknown option $OPTARG"
+			echo "Unknown option $opt"
 			exit 0;
 			;;
 	      ":")
-			echo "No argument value for option $OPTARG"
-			exit 0;
-			;;
-	      *)
-			echo "Unknown error while processing options"
+			echo "No argument value for option $opt"
 			exit 0;
 			;;
 	esac
 done
-shift $(($OPTIND - 1))
 
-#param1=$1
-#param2=$2
+#shift "$(($OPTLIND - 1))"
 
 # --- Locks -------------------------------------------------------
 LOCK_FILE=/tmp/$SUBJECT.lock
@@ -179,7 +180,32 @@ fi
 trap "rm -f $LOCK_FILE" EXIT
 touch $LOCK_FILE
 
-# --- Body --------------------------------------------------------
-#  SCRIPT LOGIC GOES HERE
-#echo $param1
-#echo $param2
+case $1 in
+     		allauto)
+		        sync_all
+		        ;;
+      		syncsite)
+		        sync_remote_site
+		        ;;
+      		createdb)
+			generate_db_credentials
+		        create_local_db
+		        ;;
+      		changeurl)
+		        change_localdb_url
+		        ;;
+      		importdb)
+			parse_wp_credentials
+			generate_db_credentials
+		        create_local_db
+		        import_remote_db
+		        ;;
+	      "?")
+			echo "Unknown command $1"
+			exit 0;
+			;;
+	      *)
+			echo "Unknown error while processing commands"
+			exit 0;
+			;;
+esac
