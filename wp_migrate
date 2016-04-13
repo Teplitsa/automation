@@ -1,0 +1,185 @@
+#!/bin/bash
+# ------------------------------------------------------------------
+# [Denis Kulandin] Title
+#          Description
+# ------------------------------------------------------------------
+
+# NOTE
+# custom script /usr/local/bin/createdb is requred to run this script!
+
+. getopts_long
+#http://stchaz.free.fr/getopts_long
+
+VERSION=0.1.0
+SUBJECT=gopt24gyuf83
+USAGE="Usage: command -ihv args"
+
+#User Globals
+REMOTE_SERVER="root@46.101.60.124"
+DB_PREFIX="testru_"
+
+# --- Options processing -------------------------------------------
+if [ $# == 0 ] ; then
+    echo $USAGE
+    exit 1;
+fi
+
+read -n 1 -p "Are you shure you want to run wp site migration script?(y/[a]): " AMSURE 
+[ "$AMSURE" = "y" ] || exit
+echo "" 1>&2
+
+
+#------------------------------------------
+sync_all() {
+	sync_remote_site
+	parse_wp_credentials
+	create_local_db
+	import_remote_db
+	change_wp_config
+
+	change_localdb_url
+	change_docroot
+}
+
+sync_remote_site() {
+
+	#Questions: 
+	#local_folder_name -- datetime?
+	#remote_folder_name -- hardcoded?
+	#TODO:
+	#cp existing existing local site folder and refresh it with remote. Use hardlinks?
+	#mode: overwrite or append?
+
+	#Get local folder name from DB name
+
+	generate_db_credentials
+	mkdir ./$db_name
+	cd ./$db_name
+	#rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./
+	echo "rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./"
+}
+
+parse_wp_credentials() {
+	#Parse wp-config.php for remote database credentials
+	#TODO: chec file exists!
+	remote_db_name=$(grep "DB_NAME" wp-config.php  | awk '{print substr($2, 2, length($2) - 4)}' | sed "s/'//g")
+	remote_db_user=$(grep "DB_USER" wp-config.php  | awk '{print substr($2, 2, length($2) - 4)}' | sed "s/'//g")
+	remote_db_pass=$(grep "DB_PASS" wp-config.php  | awk '{print substr($2, 2, length($2) - 4)}' | sed "s/'//g")
+}
+
+generate_db_credentials() {
+	echo "Generating credentials for local DB"
+	db_name=$DB_PREFIX$(date '+%y%m%d%H%M')
+	db_user=$db_name"_u"
+	randpw () { date +%s | sha256sum | base64 | head -c 10 ; echo;}
+	db_pass=$(randpw)
+}
+
+create_local_db() {
+	echo "Creating local DB and user"
+	#createdb $db_name $db_user $db_pass
+	echo createdb $db_name $db_user $db_pass
+}
+
+import_remote_db() {
+	echo "Importing remote DB to local DB"
+	#Keys must be added for server!!!
+	#ssh -C $REMOTE_SERVER mysqldump --password="$remote_db_pass" --user="$remote_db_user" $remote_db_name | mysql --password="$db_pass" --	user="$db_user" $db_name
+	echo "ssh -C $REMOTE_SERVER mysqldump --password="$remote_db_pass" --user="$remote_db_user" $remote_db_name | mysql --password="$db_pass" --user="$db_user" $db_name"
+	return 0;
+}
+
+change_wp_config() {
+	echo "Changing DB credentials in wp-config.php"
+	sed -i s/\'$remote_db_name\'/\'$db_name\'/g wp-config.php
+	sed -i s/\'$remote_db_user\'/\'$db_user\'/g wp-config.php
+	sed -i s/\'$remote_db_pass\'/\'$db_pass\'/g wp-config.php
+}
+
+change_localdb_url() {
+	#TODO:
+	#Check composer installed
+	#Check php is functioning
+	#QUESTIONS:
+	#1) What to do with srdb after use? Security problem!
+	#2) Will dev url be same always?
+	
+	#composer require interconnectit/search-replace-db
+	echo "composer require interconnectit/search-replace-db"
+	#php ./vendor/bin/srdb.cli.php -h localhost -n $db_name -u $db_user --password="$db_pass" -s ngo2.ru/tstnew -r te-st.ru
+
+}
+
+change_docroot() {
+	#change_DocumentRoot() {}
+	#-reload apache
+	echo "TODO:change_docroot()"
+}
+#------------------------------------------
+
+while getopts_long :a:s:c:u:i:vh opt \
+    #xxx required_argument \
+    #yyy required_argument \
+    help 0 "" "$@"
+    do
+        case "$opt" in
+      		a|all)
+		        sync_all
+		        ;;
+      		s|syncsite)
+		        sync_remote_site
+		        ;;
+      		c|createdb)
+			generate_db_credentials
+		        create_local_db
+		        ;;
+      		u|changeurl)
+		        change_localdb_url
+		        ;;
+      		i|importdb)
+			parse_wp_credentials
+			generate_db_credentials
+		        create_local_db
+		        import_remote_db
+		        ;;
+      		v|version)
+		        echo "Version $VERSION"
+		        exit 0;
+		        ;;
+		h|help)
+			echo $USAGE
+			exit 0;
+			;;
+	      "?")
+			echo "Unknown option $OPTARG"
+			exit 0;
+			;;
+	      ":")
+			echo "No argument value for option $OPTARG"
+			exit 0;
+			;;
+	      *)
+			echo "Unknown error while processing options"
+			exit 0;
+			;;
+	esac
+done
+shift $(($OPTIND - 1))
+
+#param1=$1
+#param2=$2
+
+# --- Locks -------------------------------------------------------
+LOCK_FILE=/tmp/$SUBJECT.lock
+if [ -f "$LOCK_FILE" ]; then
+   echo "Script is already running"
+   exit
+fi
+
+trap "rm -f $LOCK_FILE" EXIT
+touch $LOCK_FILE
+
+# --- Body --------------------------------------------------------
+#  SCRIPT LOGIC GOES HERE
+#echo $param1
+#echo $param2
