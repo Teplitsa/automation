@@ -10,7 +10,7 @@
 . getopts_long
 #http://stchaz.free.fr/getopts_long
 
-VERSION=0.1.3
+VERSION=0.2.0
 SUBJECT=gopt24gyuf83
 USAGE="Usage: command -rpufhv args/n bash wp-migrate.sh allauto -f/home/dev/web/ngo2.ru/public_html/tstdev -rdev.te-st.ru > log.txt"
 
@@ -124,12 +124,14 @@ change_wp_config() {
 	sed -i s/\'$remote_db_pass\'/\'$db_pass\'/g wp-config.php
 
 #FIXME: REMOVE HARDCODING! sed needs protection \\ before / in ngo2.ru/tstded !!!
-	echo sed -i s/\'ngo2.ru\\/tstdev\'/\'$REPLACE\'/g wp-config.php_dk
-	sed -i s/\'ngo2.ru\\/tstdev\'/\'$REPLACE\'/g wp-config.php_dk
+	echo sed -i s/\'ngo2.ru\\/tstdev\'/\'$REPLACE\'/g wp-config.php
+	sed -i s/\'ngo2.ru\\/tstdev\'/\'$REPLACE\'/g wp-config.php
+	echo sed -i s/\\/tstdev//g .htaccess
+	sed -i s/\\/tstdev//g .htaccess
 
+	echo "sed -i s/WP_DEBUG_DISPLAY\'\,\ true/WP_DEBUG_DISPLAY\'\,\ false/g wp-config.php"
+	sed -i s/WP_DEBUG_DISPLAY\'\,\ true/WP_DEBUG_DISPLAY\'\,\ false/g wp-config.php
 
-
-ngo2.ru/tstdev
 }
 
 change_localdb_url() {
@@ -230,6 +232,9 @@ case $1 in
      		allauto)
 		        sync_all
 			wp plugin activate cloudflare
+			echo "Thats all. Now run as root:"
+			echo "sed -i s/DocumentRoot\ \\\/var\\\/www\\\/devuser\\\/data\\\/www\\\/dev.te-st.ru\\\/.*/DocumentRoot\ \\\/var\\\/www\\\/devuser\\\/data\\\/www\\\/dev.te-st.ru\\\/$db_name/g /etc/apache2/apache2.conf && service apache2 reload"
+			echo "sed -i s/DocumentRoot\ \\\/var\\\/www\\\/teplouser\\\/data\\\/www\\\/te-st.ru\\\/.*/DocumentRoot\ \\\/var\\\/www\\\/devuser\\\/data\\\/www\\\/te-st.ru\\\/newsite\\\/$db_name/g /etc/apache2/apache2.conf && service apache2 reload"
 		        ;;
       		syncsite)
 		        sync_remote_site
