@@ -10,16 +10,27 @@
 . getopts_long
 #http://stchaz.free.fr/getopts_long
 
-VERSION=0.1.1
+VERSION=0.1.2
 SUBJECT=gopt24gyuf83
-USAGE="Usage: command -rpufhv args"
+USAGE="Usage: command -rpufhv args/n bash wp-migrate.sh allauto -f/home/dev/web/ngo2.ru/public_html/iskorka/ -sngo2.ru/iskorka -rhttpiskorka.te-st.ru"
 
 #Defaults
 REMOTE_USERIP="dev@46.101.60.124"
 REMOTE_PASS=""
-REMOTE_FOLDER="/home/dev/web/ngo2.ru/public_html/samara42/"
+FOLDER="/home/dev/web/ngo2.ru/public_html/samara42/"
+SEARCH="ngo2.ru/testdev"
+REPLACE="dev.te-st.ru"
 
-DB_PREFIX="testru_"
+parseconfig=false
+
+#LOCAL_FOLDER=""
+
+#NB! DB user name not longer then 16 symbols
+#testru_ 1604140106 _u
+#DB prefix must not exceed 6 symbols
+DB_PREFIX="testru"
+#ngo2.ru/tstnew
+
 
 # --- Options processing -------------------------------------------
 if [ $# == 0 ] ; then
@@ -49,7 +60,7 @@ sync_remote_site() {
 
 	#Questions: 
 	#local_folder_name -- datetime?
-	#remote_folder_name -- hardcoded?
+	#FOLDER_name -- hardcoded?
 	#TODO:
 	#cp existing existing local site folder and refresh it with remote. Use hardlinks?
 	#mode: overwrite or append?
@@ -65,8 +76,8 @@ sync_remote_site() {
 	cd ./$db_name
 	#rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./
 	#echo "rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./"
-	echo "rsync -avz -e ssh $REMOTE_USERIP:$REMOTE_FOLDER ./"
-	rsync rsync -avz -e ssh $REMOTE_USERIP:$REMOTE_FOLDER ./
+	echo "rsync -avzq --exclude='.git/' -e ssh $REMOTE_USERIP:$FOLDER ./"
+	rsync -avzq --info=progress2 --exclude='.git/' -e  ssh $REMOTE_USERIP:$FOLDER ./
 
 }
 
@@ -81,29 +92,33 @@ parse_wp_credentials() {
 generate_db_credentials() {
 	echo "Generating credentials for local DB"
 	db_name=$DB_PREFIX$(date '+%y%m%d%H%M')
-	db_user=$db_name"_u"
+	db_user=$db_name
 	randpw () { date +%s | sha256sum | base64 | head -c 10 ; echo;}
 	db_pass=$(randpw)
 }
 
 create_local_db() {
 	echo "Creating local DB and user"
-	#createdb $db_name $db_user $db_pass
+	createdb $db_name $db_user $db_pass
 	echo createdb $db_name $db_user $db_pass
 }
 
 import_remote_db() {
 	echo "Importing remote DB to local DB"
 	#Keys must be added for server!!!
-	#ssh -C $REMOTE_SERVER mysqldump --password="$remote_db_pass" --user="$remote_db_user" $remote_db_name | mysql --password="$db_pass" --	user="$db_user" $db_name
-	echo "ssh -C $REMOTE_SERVER mysqldump --password="$remote_db_pass" --user="$remote_db_user" $remote_db_name | mysql --password="$db_pass" --user="$db_user" $db_name"
+	echo "ssh -C $REMOTE_USERIP mysqldump --password=$remote_db_pass --user=$remote_db_user $remote_db_name | mysql --password=$db_pass --user=$db_user $db_name"
+	ssh -C $REMOTE_USERIP mysqldump -p$remote_db_pass -u$remote_db_user $remote_db_name | mysql -p$db_pass -u$db_user $db_name
+
 	return 0;
 }
 
 change_wp_config() {
 	echo "Changing DB credentials in wp-config.php"
+	echo "sed -i s/\'$remote_db_name\'/\'$db_name\'/g wp-config.php"
 	sed -i s/\'$remote_db_name\'/\'$db_name\'/g wp-config.php
+	echo "sed -i s/\'$remote_db_user\'/\'$db_user\'/g wp-config.php"
 	sed -i s/\'$remote_db_user\'/\'$db_user\'/g wp-config.php
+	echo "sed -i s/\'$remote_db_pass\'/\'$db_pass\'/g wp-config.php"
 	sed -i s/\'$remote_db_pass\'/\'$db_pass\'/g wp-config.php
 }
 
@@ -112,13 +127,22 @@ change_localdb_url() {
 	#Check composer installed
 	#Check php is functioning
 	#QUESTIONS:
-	#1) What to do with srdb after use? Security problem!
 	#2) Will dev url be same always?
-	
-	#composer require interconnectit/search-replace-db
-	echo "composer require interconnectit/search-replace-db"
-	#php ./vendor/bin/srdb.cli.php -h localhost -n $db_name -u $db_user --password="$db_pass" -s ngo2.ru/tstnew -r te-st.ru
+	#current method with composer install is unreliable. Fix it!
 
+	current_folder="$(pwd)"
+	#scriptdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+	cd ..
+
+	echo "COMPOSER DIR IS $scriptdir"	
+	echo "composer require interconnectit/search-replace-db"	
+	composer require interconnectit/search-replace-db
+	echo "php ./vendor/bin/srdb.cli.php -h localhost -n $db_name -u $db_user --password="$db_pass" -s $SEARCH -r $REPLACE"
+	php ./vendor/bin/srdb.cli.php -h localhost -n $db_name -u $db_user --password="$db_pass" -s $SEARCH -r $REPLACE
+	echo "composer remove interconnectit/search-replace-db"
+	composer remove interconnectit/search-replace-db
+	
+	cd $current_folder
 }
 
 change_docroot() {
@@ -129,10 +153,11 @@ change_docroot() {
 #------------------------------------------
 #As first input is reserved for command then:
 OPTLIND=2 
-while getopts_long p:f:u:vh opt \
+while getopts_long p:f:i:s:r:wvh opt \
    pass required_argument \
    userip required_argument \
    folder required_argument \
+   parseconfig no_argument \
    version no_argument \
     help 0 "" "$@"
     do
@@ -141,13 +166,24 @@ while getopts_long p:f:u:vh opt \
 			REMOTE_PASS=$OPTLARG
 			echo "Remote Pass = $REMOTE_PASS"
 			;;
-		u|userip)
+		i|userip)
 			REMOTE_USERIP=$OPTLARG
 			echo "Remote user and IP = $REMOTE_USERIP"
 			;;
+		s|search)
+			SEARCH=$OPTLARG
+			echo "Search = $SEARCH"
+			;;
+		r|replace)
+			REPLACE=$OPTLARG
+			echo "Replace = $REPLACE"
+			;;
+		w|parseconfig)
+     			parseconfig=true
+			;;
 		f|folder)
-			REMOTE_FOLDER=$OPTLARG
-			echo "Remote Folder = $REMOTE_FOLDER"
+			FOLDER=$OPTLARG
+			echo "Remote Folder = $FOLDER"
 			;;
       		v|version)
 		        echo "Version $VERSION"
@@ -182,6 +218,8 @@ touch $LOCK_FILE
 
 case $1 in
      		allauto)
+			SEARCH=$(wp option get home | sed 's~http[s]*://~~g')
+			echo "Source URL=$SEARCH"
 		        sync_all
 		        ;;
       		syncsite)
@@ -192,9 +230,14 @@ case $1 in
 		        create_local_db
 		        ;;
       		changeurl)
+			cd $FOLDER
+			if $parseconfig; then
+				parse_wp_credentials
+			fi
 		        change_localdb_url
 		        ;;
       		importdb)
+			cd $FOLDER
 			parse_wp_credentials
 			generate_db_credentials
 		        create_local_db
