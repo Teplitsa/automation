@@ -10,9 +10,9 @@
 . getopts_long
 #http://stchaz.free.fr/getopts_long
 
-VERSION=0.1.2
+VERSION=0.1.3
 SUBJECT=gopt24gyuf83
-USAGE="Usage: command -rpufhv args/n bash wp-migrate.sh allauto -f/home/dev/web/ngo2.ru/public_html/iskorka/ -sngo2.ru/iskorka -rhttpiskorka.te-st.ru"
+USAGE="Usage: command -rpufhv args/n bash wp-migrate.sh allauto -f/home/dev/web/ngo2.ru/public_html/tstdev -rdev.te-st.ru > log.txt"
 
 #Defaults
 REMOTE_USERIP="dev@46.101.60.124"
@@ -52,6 +52,8 @@ sync_all() {
 	import_remote_db
 	change_wp_config
 
+	SEARCH=$(wp option get home | sed 's~http[s]*://~~g')
+	echo "Source URL=$SEARCH"
 	change_localdb_url
 	change_docroot
 }
@@ -65,20 +67,20 @@ sync_remote_site() {
 	#cp existing existing local site folder and refresh it with remote. Use hardlinks?
 	#mode: overwrite or append?
 
-	#Get local folder name from DB name
-	#if [ $# == 0 ] ; then
-	 #   echo $USAGE
-	  #  exit 1;
-	#fi
-
 	generate_db_credentials
-	mkdir ./$db_name
+
+	
+#	mkdir ./$db_name
+	echo "cp -al ../orig_testru $db_name"
+	cp -al orig_testru $db_name
 	cd ./$db_name
+
 	#rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./
 	#echo "rsync -avz -e ssh dev@46.101.60.124:/home/dev/web/ngo2.ru/public_html/samara42/ ./"
-	echo "rsync -avzq --exclude='.git/' -e ssh $REMOTE_USERIP:$FOLDER ./"
-	rsync -avzq --info=progress2 --exclude='.git/' -e  ssh $REMOTE_USERIP:$FOLDER ./
-
+#	echo "rsync -avzq --exclude='.git/' -e ssh $REMOTE_USERIP:$FOLDER ./"
+#	rsync -avzq --info=progress2 --delete --exclude='.git/' -e  ssh $REMOTE_USERIP:$FOLDER ./
+	echo rsync -avzq --delete --exclude='.git/' -e  ssh $REMOTE_USERIP:$FOLDER/ ./
+	rsync -avzq --delete --exclude='.git/' -e  ssh $REMOTE_USERIP:$FOLDER/ ./
 }
 
 parse_wp_credentials() {
@@ -120,6 +122,14 @@ change_wp_config() {
 	sed -i s/\'$remote_db_user\'/\'$db_user\'/g wp-config.php
 	echo "sed -i s/\'$remote_db_pass\'/\'$db_pass\'/g wp-config.php"
 	sed -i s/\'$remote_db_pass\'/\'$db_pass\'/g wp-config.php
+
+#FIXME: REMOVE HARDCODING! sed needs protection \\ before / in ngo2.ru/tstded !!!
+	echo sed -i s/\'ngo2.ru\\/tstdev\'/\'$REPLACE\'/g wp-config.php_dk
+	sed -i s/\'ngo2.ru\\/tstdev\'/\'$REPLACE\'/g wp-config.php_dk
+
+
+
+ngo2.ru/tstdev
 }
 
 change_localdb_url() {
@@ -134,11 +144,11 @@ change_localdb_url() {
 	#scriptdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 	cd ..
 
-	echo "COMPOSER DIR IS $scriptdir"	
+	echo "COMPOSER DIR IS $(pwd)"	
 	echo "composer require interconnectit/search-replace-db"	
 	composer require interconnectit/search-replace-db
-	echo "php ./vendor/bin/srdb.cli.php -h localhost -n $db_name -u $db_user --password="$db_pass" -s $SEARCH -r $REPLACE"
-	php ./vendor/bin/srdb.cli.php -h localhost -n $db_name -u $db_user --password="$db_pass" -s $SEARCH -r $REPLACE
+	echo "php ./vendor/bin/srdb.cli.php -hlocalhost -n$db_name -u$db_user --pass=$db_pass -s$SEARCH -r$REPLACE"
+	php ./vendor/bin/srdb.cli.php -hlocalhost -n$db_name -u$db_user --pass=$db_pass -s$SEARCH -r$REPLACE
 	echo "composer remove interconnectit/search-replace-db"
 	composer remove interconnectit/search-replace-db
 	
@@ -218,9 +228,8 @@ touch $LOCK_FILE
 
 case $1 in
      		allauto)
-			SEARCH=$(wp option get home | sed 's~http[s]*://~~g')
-			echo "Source URL=$SEARCH"
 		        sync_all
+			wp plugin activate cloudflare
 		        ;;
       		syncsite)
 		        sync_remote_site
